@@ -19,7 +19,7 @@
 #include "geometry_msgs/msg/pose_stamped.hpp"
 #include "nav2_util/robot_utils.hpp"
 
-#include "../../test_behavior_tree_fixture.hpp"
+#include "utils/test_behavior_tree_fixture.hpp"
 #include "nav2_behavior_tree/plugins/condition/globally_updated_goal_condition.hpp"
 
 class GloballyUpdatedGoalConditionTestFixture : public nav2_behavior_tree::BehaviorTreeTestFixture
@@ -27,6 +27,8 @@ class GloballyUpdatedGoalConditionTestFixture : public nav2_behavior_tree::Behav
 public:
   void SetUp()
   {
+    config_->input_ports["goals"] = "";
+    config_->input_ports["goal"] = "";
     bt_node_ = std::make_shared<nav2_behavior_tree::GloballyUpdatedGoalCondition>(
       "globally_updated_goal", *config_);
   }
@@ -49,7 +51,7 @@ TEST_F(GloballyUpdatedGoalConditionTestFixture, test_behavior)
   config_->blackboard->set("goal", goal);
 
   EXPECT_EQ(bt_node_->status(), BT::NodeStatus::IDLE);
-  EXPECT_EQ(bt_node_->executeTick(), BT::NodeStatus::FAILURE);
+  EXPECT_EQ(bt_node_->executeTick(), BT::NodeStatus::SUCCESS);
 
   goal.pose.position.x = 1.0;
   config_->blackboard->set("goal", goal);

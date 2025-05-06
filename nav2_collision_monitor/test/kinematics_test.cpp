@@ -1,4 +1,4 @@
-// Copyright (c) 2022 Samsung Research Russia
+// Copyright (c) 2022 Samsung R&D Institute Russia
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -28,14 +28,6 @@
 using namespace std::chrono_literals;
 
 static constexpr double EPSILON = std::numeric_limits<float>::epsilon();
-
-class RclCppFixture
-{
-public:
-  RclCppFixture() {rclcpp::init(0, nullptr);}
-  ~RclCppFixture() {rclcpp::shutdown();}
-};
-RclCppFixture g_rclcppfixture;
 
 TEST(KinematicsTest, testTransformPoints)
 {
@@ -95,4 +87,17 @@ TEST(KinematicsTest, testProjectState)
   EXPECT_NEAR(vel.x, std::cos(rotated_vel_angle), EPSILON);
   EXPECT_NEAR(vel.y, std::sin(rotated_vel_angle), EPSILON);
   EXPECT_NEAR(vel.tw, M_PI / 4.0, EPSILON);  // should be the same
+}
+
+int main(int argc, char **argv)
+{
+  ::testing::InitGoogleTest(&argc, argv);
+
+  rclcpp::init(0, nullptr);
+
+  int result = RUN_ALL_TESTS();
+
+  rclcpp::shutdown();
+
+  return result;
 }

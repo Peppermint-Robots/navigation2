@@ -79,27 +79,20 @@ public:
    */
   bool reset(const std::chrono::nanoseconds timeout = std::chrono::nanoseconds(-1));
   /**
+   * @brief Make configure service call
+   * @return true or false
+   */
+  bool configure(const std::chrono::nanoseconds timeout = std::chrono::nanoseconds(-1));
+  /**
+   * @brief Make cleanup service call
+   * @return true or false
+   */
+  bool cleanup(const std::chrono::nanoseconds timeout = std::chrono::nanoseconds(-1));
+  /**
    * @brief Check if lifecycle node manager server is active
    * @return ACTIVE or INACTIVE or TIMEOUT
    */
   SystemStatus is_active(const std::chrono::nanoseconds timeout = std::chrono::nanoseconds(-1));
-
-  // A couple convenience methods to facilitate scripting tests
-  /**
-   * @brief Set initial pose with covariance
-   * @param x X position
-   * @param y Y position
-   * @param theta orientation
-   */
-  void set_initial_pose(double x, double y, double theta);
-  /**
-   * @brief Send goal pose to NavigationToPose action server
-   * @param x X position
-   * @param y Y position
-   * @param theta orientation
-   * @return true or false
-   */
-  bool navigate_to_pose(double x, double y, double theta);
 
 protected:
   using ManageLifecycleNodes = nav2_msgs::srv::ManageLifecycleNodes;
@@ -115,8 +108,8 @@ protected:
   // The node to use for the service call
   rclcpp::Node::SharedPtr node_;
 
-  std::shared_ptr<nav2_util::ServiceClient<ManageLifecycleNodes>> manager_client_;
-  std::shared_ptr<nav2_util::ServiceClient<std_srvs::srv::Trigger>> is_active_client_;
+  nav2_util::ServiceClient<ManageLifecycleNodes>::SharedPtr manager_client_;
+  nav2_util::ServiceClient<std_srvs::srv::Trigger>::SharedPtr is_active_client_;
   std::string manage_service_name_;
   std::string active_service_name_;
 };

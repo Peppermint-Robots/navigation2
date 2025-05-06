@@ -15,9 +15,11 @@
 #include <vector>
 #include <memory>
 #include "nav2_smoother/simple_smoother.hpp"
+#include "nav2_core/smoother_exceptions.hpp"
 
 namespace nav2_smoother
 {
+using namespace smoother_utils;  // NOLINT
 using namespace nav2_util::geometry_utils;  // NOLINT
 using namespace std::chrono;  // NOLINT
 using nav2_util::declare_parameter_if_not_declared;
@@ -43,12 +45,18 @@ void SimpleSmoother::configure(
     node, name + ".w_smooth", rclcpp::ParameterValue(0.3));
   declare_parameter_if_not_declared(
     node, name + ".do_refinement", rclcpp::ParameterValue(true));
+  declare_parameter_if_not_declared(
+    node, name + ".refinement_num", rclcpp::ParameterValue(2));
+  declare_parameter_if_not_declared(
+    node, name + ".enforce_path_inversion", rclcpp::ParameterValue(true));
 
   node->get_parameter(name + ".tolerance", tolerance_);
   node->get_parameter(name + ".max_its", max_its_);
   node->get_parameter(name + ".w_data", data_w_);
   node->get_parameter(name + ".w_smooth", smooth_w_);
   node->get_parameter(name + ".do_refinement", do_refinement_);
+  node->get_parameter(name + ".refinement_num", refinement_num_);
+  node->get_parameter(name + ".enforce_path_inversion", enforce_path_inversion_);
 }
 
 bool SimpleSmoother::smooth(
@@ -57,15 +65,20 @@ bool SimpleSmoother::smooth(
 {
   auto costmap = costmap_sub_->getCostmap();
 
-  refinement_ctr_ = 0;
   steady_clock::time_point start = steady_clock::now();
   double time_remaining = max_time.seconds();
 
-  bool success = true, reversing_segment;
+  bool reversing_segment;
   nav_msgs::msg::Path curr_path_segment;
   curr_path_segment.header = path.header;
 
-  std::vector<PathSegment> path_segments = findDirectionalPathSegments(path);
+  std::vector<PathSegment> path_segments{PathSegment{
+      0u, static_cast<unsigned int>(path.poses.size() - 1)}};
+  if (enforce_path_inversion_) {
+    path_segments = findDirectionalPathSegments(path);
+  }
+
+  std::lock_guard<nav2_costmap_2d::Costmap2D::mutex_t> lock(*(costmap->getMutex()));
 
   for (unsigned int i = 0; i != path_segments.size(); i++) {
     if (path_segments[i].end - path_segments[i].start > 9) {
@@ -79,10 +92,11 @@ bool SimpleSmoother::smooth(
       // Make sure we're still able to smooth with time remaining
       steady_clock::time_point now = steady_clock::now();
       time_remaining = max_time.seconds() - duration_cast<duration<double>>(now - start).count();
+      refinement_ctr_ = 0;
 
-      // Smooth path segment naively
-      success = success && smoothImpl(
-        curr_path_segment, reversing_segment, costmap.get(), time_remaining);
+      // Attempt to smooth the segment
+      // May throw SmootherTimedOut
+      smoothImpl(curr_path_segment, reversing_segment, costmap.get(), time_remaining);
 
       // Assemble the path changes to the main path
       std::copy(
@@ -92,10 +106,10 @@ bool SimpleSmoother::smooth(
     }
   }
 
-  return success;
+  return true;
 }
 
-bool SimpleSmoother::smoothImpl(
+void SimpleSmoother::smoothImpl(
   nav_msgs::msg::Path & path,
   bool & reversing_segment,
   const nav2_costmap_2d::Costmap2D * costmap,
@@ -124,7 +138,7 @@ bool SimpleSmoother::smoothImpl(
         "Number of iterations has exceeded limit of %i.", max_its_);
       path = last_path;
       updateApproximatePathOrientations(path, reversing_segment);
-      return false;
+      return;
     }
 
     // Make sure still have time left to process
@@ -136,7 +150,7 @@ bool SimpleSmoother::smoothImpl(
         "Smoothing time exceeded allowed duration of %0.2f.", max_time);
       path = last_path;
       updateApproximatePathOrientations(path, reversing_segment);
-      return false;
+      throw nav2_core::SmootherTimedOut("Smoothing time exceed allowed duration");
     }
 
     for (unsigned int i = 1; i != path_size - 1; i++) {
@@ -170,23 +184,22 @@ bool SimpleSmoother::smoothImpl(
           "Returning the last path before the infeasibility was introduced.");
         path = last_path;
         updateApproximatePathOrientations(path, reversing_segment);
-        return false;
+        return;
       }
     }
 
     last_path = new_path;
   }
 
-  // Lets do additional refinement, it shouldn't take more than a couple milliseconds
+  // Let's do additional refinement, it shouldn't take more than a couple milliseconds
   // but really puts the path quality over the top.
-  if (do_refinement_ && refinement_ctr_ < 4) {
+  if (do_refinement_ && refinement_ctr_ < refinement_num_) {
     refinement_ctr_++;
     smoothImpl(new_path, reversing_segment, costmap, max_time);
   }
 
   updateApproximatePathOrientations(new_path, reversing_segment);
   path = new_path;
-  return true;
 }
 
 double SimpleSmoother::getFieldByDim(
@@ -211,85 +224,6 @@ void SimpleSmoother::setFieldByDim(
     msg.pose.position.y = value;
   } else {
     msg.pose.position.z = value;
-  }
-}
-
-std::vector<PathSegment> SimpleSmoother::findDirectionalPathSegments(
-  const nav_msgs::msg::Path & path)
-{
-  std::vector<PathSegment> segments;
-  PathSegment curr_segment;
-  curr_segment.start = 0;
-
-  // Iterating through the path to determine the position of the cusp
-  for (unsigned int idx = 1; idx < path.poses.size() - 1; ++idx) {
-    // We have two vectors for the dot product OA and AB. Determining the vectors.
-    double oa_x = path.poses[idx].pose.position.x -
-      path.poses[idx - 1].pose.position.x;
-    double oa_y = path.poses[idx].pose.position.y -
-      path.poses[idx - 1].pose.position.y;
-    double ab_x = path.poses[idx + 1].pose.position.x -
-      path.poses[idx].pose.position.x;
-    double ab_y = path.poses[idx + 1].pose.position.y -
-      path.poses[idx].pose.position.y;
-
-    // Checking for the existance of cusp, in the path, using the dot product.
-    double dot_product = (oa_x * ab_x) + (oa_y * ab_y);
-    if (dot_product < 0.0) {
-      curr_segment.end = idx;
-      segments.push_back(curr_segment);
-      curr_segment.start = idx;
-    }
-
-    // Checking for the existance of a differential rotation in place.
-    double cur_theta = tf2::getYaw(path.poses[idx].pose.orientation);
-    double next_theta = tf2::getYaw(path.poses[idx + 1].pose.orientation);
-    double dtheta = angles::shortest_angular_distance(cur_theta, next_theta);
-    if (fabs(ab_x) < 1e-4 && fabs(ab_y) < 1e-4 && fabs(dtheta) > 1e-4) {
-      curr_segment.end = idx;
-      segments.push_back(curr_segment);
-      curr_segment.start = idx;
-    }
-  }
-
-  curr_segment.end = path.poses.size() - 1;
-  segments.push_back(curr_segment);
-  return segments;
-}
-
-void SimpleSmoother::updateApproximatePathOrientations(
-  nav_msgs::msg::Path & path,
-  bool & reversing_segment)
-{
-  double dx, dy, theta, pt_yaw;
-  reversing_segment = false;
-
-  // Find if this path segment is in reverse
-  dx = path.poses[2].pose.position.x - path.poses[1].pose.position.x;
-  dy = path.poses[2].pose.position.y - path.poses[1].pose.position.y;
-  theta = atan2(dy, dx);
-  pt_yaw = tf2::getYaw(path.poses[1].pose.orientation);
-  if (fabs(angles::shortest_angular_distance(pt_yaw, theta)) > M_PI_2) {
-    reversing_segment = true;
-  }
-
-  // Find the angle relative the path position vectors
-  for (unsigned int i = 0; i != path.poses.size() - 1; i++) {
-    dx = path.poses[i + 1].pose.position.x - path.poses[i].pose.position.x;
-    dy = path.poses[i + 1].pose.position.y - path.poses[i].pose.position.y;
-    theta = atan2(dy, dx);
-
-    // If points are overlapping, pass
-    if (fabs(dx) < 1e-4 && fabs(dy) < 1e-4) {
-      continue;
-    }
-
-    // Flip the angle if this path segment is in reverse
-    if (reversing_segment) {
-      theta += M_PI;  // orientationAroundZAxis will normalize
-    }
-
-    path.poses[i].pose.orientation = orientationAroundZAxis(theta);
   }
 }
 

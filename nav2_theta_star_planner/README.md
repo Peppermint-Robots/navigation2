@@ -1,9 +1,9 @@
 # Nav2 Theta Star Planner
 The Theta Star Planner is a global planning plugin meant to be used with the Nav2 Planner Server. The `nav2_theta_star_planner` implements a highly optimized version of the Theta\* Planner (specifically the [Lazy Theta\* P variant](http://idm-lab.org/bib/abstracts/papers/aaai10b.pdf)) meant to plan any-angle paths using A\*. The planner supports differential-drive and omni-directional robots.
 
-See its [Configuration Guide Page](https://navigation.ros.org/configuration/packages/configuring-thetastar.html) for additional parameter descriptions.
+See its [Configuration Guide Page](https://docs.nav2.org/configuration/packages/configuring-thetastar.html) for additional parameter descriptions.
 
-## Features 
+## Features
 - The planner uses A\* search along with line of sight (LOS) checks to form any-angle paths thus avoiding zig-zag paths that may be present in the usual implementation of A\*
 - As it also considers the costmap traversal cost during execution it tends to smoothen the paths automatically, thus mitigating the need to smoothen the path (The presence of sharp turns depends on the resolution of the map, and it decreases as the map resolution increases)
 - Uses the costs from the costmap to penalise high cost regions
@@ -51,14 +51,13 @@ w1*euc_cost(par, neigh) + w2*(costmap(par,neigh)/LETHAL_COST)^2`
 ## Parameters
 The parameters of the planner are :
 - ` .how_many_corners ` : to choose between 4-connected and 8-connected graph expansions, the accepted values are 4 and 8
-- ` .w_euc_cost ` : weight applied on the length of the path. 
+- ` .w_euc_cost ` : weight applied on the length of the path.
 - ` .w_traversal_cost ` : it tunes how harshly the nodes of high cost are penalised. From the above g(neigh) equation you can see that the cost-aware component of the cost function forms a parabolic curve, thus this parameter would, on increasing its value, make that curve steeper allowing for a greater differentiation (as the delta of costs would increase, when the graph becomes steep) among the nodes of different costs.
 Below are the default values of the parameters :
 ```
 planner_server:
   ros__parameters:
-    planner_plugin_types: ["nav2_theta_star_planner/ThetaStarPlanner"]
-    use_sim_time: True
+    planner_plugin_types: ["nav2_theta_star_planner::ThetaStarPlanner"]
     planner_plugin_ids: ["GridBased"]
     GridBased:
       how_many_corners: 8
@@ -75,9 +74,9 @@ This planner uses the costs associated with each cell from the `global_costmap` 
 
 Providing a gentle potential field over the region allows the planner to exchange the increase in path lengths for a decrease in the accumulated traversal cost, thus leading to an increase in the distance from the obstacles. This around a corner allows for naturally smoothing the turns and removes the requirement for an external path smoother.
 
-`w_heuristic_cost` is an internal setting that is not user changable. It has been provided to have an admissible heuristic, restricting its value to the minimum of `w_euc_cost` and `1.0` to make sure the heuristic and travel costs are admissible and consistent.
+`w_heuristic_cost` is an internal setting that is not user changeable. It has been provided to have an admissible heuristic, restricting its value to the minimum of `w_euc_cost` and `1.0` to make sure the heuristic and travel costs are admissible and consistent.
 
-To begin with, you can set the parameters to its default values and then try increasing the value of `w_traversal_cost` to achieve those middling paths, but this would adversly make the paths less taut. So it is recommend ed that you simultaneously tune the value of `w_euc_cost`. Increasing `w_euc_cost` increases the tautness of the path, which leads to more straight line like paths (any-angled paths). Do note that the query time from the planner would increase for higher values of `w_traversal_cost` as more nodes would have to be expanded to lower the cost of the path, to counteract this you may also try setting `w_euc_cost` to a higher value and check if it reduces the query time.
+To begin with, you can set the parameters to its default values and then try increasing the value of `w_traversal_cost` to achieve those middling paths, but this would adversely make the paths less taut. So it is recommended that you simultaneously tune the value of `w_euc_cost`. Increasing `w_euc_cost` increases the tautness of the path, which leads to more straight line like paths (any-angled paths). Do note that the query time from the planner would increase for higher values of `w_traversal_cost` as more nodes would have to be expanded to lower the cost of the path, to counteract this you may also try setting `w_euc_cost` to a higher value and check if it reduces the query time.
 
 Also note that changes to `w_traversal_cost` might cause slow downs, in case the number of node expanisions increase thus tuning it along with `w_euc_cost` is the way to go to.
 

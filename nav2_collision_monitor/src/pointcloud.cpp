@@ -1,4 +1,4 @@
-// Copyright (c) 2022 Samsung Research Russia
+// Copyright (c) 2022 Samsung R&D Institute Russia
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,8 +17,10 @@
 #include <functional>
 
 #include "sensor_msgs/point_cloud2_iterator.hpp"
+#include "tf2/transform_datatypes.hpp"
 
 #include "nav2_util/node_utils.hpp"
+#include "nav2_util/robot_utils.hpp"
 
 namespace nav2_collision_monitor
 {
@@ -30,10 +32,11 @@ PointCloud::PointCloud(
   const std::string & base_frame_id,
   const std::string & global_frame_id,
   const tf2::Duration & transform_tolerance,
-  const rclcpp::Duration & source_timeout)
+  const rclcpp::Duration & source_timeout,
+  const bool base_shift_correction)
 : Source(
     node, source_name, tf_buffer, base_frame_id, global_frame_id,
-    transform_tolerance, source_timeout),
+    transform_tolerance, source_timeout, base_shift_correction),
   data_(nullptr)
 {
   RCLCPP_INFO(logger_, "[%s]: Creating PointCloud", source_name_.c_str());
@@ -47,6 +50,7 @@ PointCloud::~PointCloud()
 
 void PointCloud::configure()
 {
+  Source::configure();
   auto node = node_.lock();
   if (!node) {
     throw std::runtime_error{"Failed to lock node"};
@@ -62,24 +66,22 @@ void PointCloud::configure()
     std::bind(&PointCloud::dataCallback, this, std::placeholders::_1));
 }
 
-void PointCloud::getData(
+bool PointCloud::getData(
   const rclcpp::Time & curr_time,
-  std::vector<Point> & data) const
+  std::vector<Point> & data)
 {
   // Ignore data from the source if it is not being published yet or
   // not published for a long time
   if (data_ == nullptr) {
-    return;
+    return false;
   }
   if (!sourceValid(data_->header.stamp, curr_time)) {
-    return;
+    return false;
   }
 
-  // Obtaining the transform to get data from source frame and time where it was received
-  // to the base frame and current time
   tf2::Transform tf_transform;
-  if (!getTransform(data_->header.frame_id, data_->header.stamp, curr_time, tf_transform)) {
-    return;
+  if (!getTransform(curr_time, data_->header, tf_transform)) {
+    return false;
   }
 
   sensor_msgs::PointCloud2ConstIterator<float> iter_x(*data_, "x");
@@ -97,6 +99,7 @@ void PointCloud::getData(
       data.push_back({p_v3_b.x(), p_v3_b.y()});
     }
   }
+  return true;
 }
 
 void PointCloud::getParameters(std::string & source_topic)

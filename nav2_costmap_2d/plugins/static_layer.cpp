@@ -43,8 +43,9 @@
 #include <string>
 
 #include "pluginlib/class_list_macros.hpp"
-#include "tf2/convert.h"
+#include "tf2/convert.hpp"
 #include "tf2_geometry_msgs/tf2_geometry_msgs.hpp"
+#include "nav2_util/validate_messages.hpp"
 
 PLUGINLIB_EXPORT_CLASS(nav2_costmap_2d::StaticLayer, nav2_costmap_2d::Layer)
 
@@ -111,6 +112,10 @@ StaticLayer::activate()
 void
 StaticLayer::deactivate()
 {
+  auto node = node_.lock();
+  if (dyn_params_handler_ && node) {
+    node->remove_on_set_parameters_callback(dyn_params_handler_.get());
+  }
   dyn_params_handler_.reset();
 }
 
@@ -131,7 +136,9 @@ StaticLayer::getParameters()
   declareParameter("subscribe_to_updates", rclcpp::ParameterValue(false));
   declareParameter("map_subscribe_transient_local", rclcpp::ParameterValue(true));
   declareParameter("transform_tolerance", rclcpp::ParameterValue(0.0));
-  declareParameter("map_topic", rclcpp::ParameterValue(""));
+  declareParameter("map_topic", rclcpp::ParameterValue("map"));
+  declareParameter("footprint_clearing_enabled", rclcpp::ParameterValue(false));
+  declareParameter("restore_cleared_footprint", rclcpp::ParameterValue(true));
 
   auto node = node_.lock();
   if (!node) {
@@ -140,14 +147,10 @@ StaticLayer::getParameters()
 
   node->get_parameter(name_ + "." + "enabled", enabled_);
   node->get_parameter(name_ + "." + "subscribe_to_updates", subscribe_to_updates_);
-  std::string private_map_topic, global_map_topic;
-  node->get_parameter(name_ + "." + "map_topic", private_map_topic);
-  node->get_parameter("map_topic", global_map_topic);
-  if (!private_map_topic.empty()) {
-    map_topic_ = private_map_topic;
-  } else {
-    map_topic_ = global_map_topic;
-  }
+  node->get_parameter(name_ + "." + "footprint_clearing_enabled", footprint_clearing_enabled_);
+  node->get_parameter(name_ + "." + "restore_cleared_footprint", restore_cleared_footprint_);
+  node->get_parameter(name_ + "." + "map_topic", map_topic_);
+  map_topic_ = joinWithParentNamespace(map_topic_);
   node->get_parameter(
     name_ + "." + "map_subscribe_transient_local",
     map_subscribe_transient_local_);
@@ -161,7 +164,7 @@ StaticLayer::getParameters()
   // Enforce bounds
   lethal_threshold_ = std::max(std::min(temp_lethal_threshold, 100), 0);
   map_received_ = false;
-  update_in_progress_.store(false);
+  map_received_in_update_bounds_ = false;
 
   transform_tolerance_ = tf2::durationFromSec(temp_tf_tol);
 
@@ -277,17 +280,17 @@ StaticLayer::interpretValue(unsigned char value)
 void
 StaticLayer::incomingMap(const nav_msgs::msg::OccupancyGrid::SharedPtr new_map)
 {
-  std::lock_guard<Costmap2D::mutex_t> guard(*getMutex());
+  if (!nav2_util::validateMsg(*new_map)) {
+    RCLCPP_ERROR(logger_, "Received map message is malformed. Rejecting.");
+    return;
+  }
   if (!map_received_) {
+    processMap(*new_map);
     map_received_ = true;
-    processMap(*new_map);
+    return;
   }
-  if (update_in_progress_.load()) {
-    map_buffer_ = new_map;
-  } else {
-    processMap(*new_map);
-    map_buffer_ = nullptr;
-  }
+  std::lock_guard<Costmap2D::mutex_t> guard(*getMutex());
+  map_buffer_ = new_map;
 }
 
 void
@@ -315,6 +318,7 @@ StaticLayer::incomingUpdate(map_msgs::msg::OccupancyGridUpdate::ConstSharedPtr u
       "StaticLayer: Map update ignored. Current map is in frame %s "
       "but update was in frame %s",
       map_frame_.c_str(), update->header.frame_id.c_str());
+    return;
   }
 
   unsigned int di = 0;
@@ -332,17 +336,18 @@ StaticLayer::incomingUpdate(map_msgs::msg::OccupancyGridUpdate::ConstSharedPtr u
 
 void
 StaticLayer::updateBounds(
-  double /*robot_x*/, double /*robot_y*/, double /*robot_yaw*/, double * min_x,
+  double robot_x, double robot_y, double robot_yaw, double * min_x,
   double * min_y,
   double * max_x,
   double * max_y)
 {
   if (!map_received_) {
+    map_received_in_update_bounds_ = false;
     return;
   }
+  map_received_in_update_bounds_ = true;
 
   std::lock_guard<Costmap2D::mutex_t> guard(*getMutex());
-  update_in_progress_.store(true);
 
   // If there is a new available map, load it.
   if (map_buffer_) {
@@ -369,6 +374,24 @@ StaticLayer::updateBounds(
   *max_y = std::max(wy, *max_y);
 
   has_updated_data_ = false;
+
+  updateFootprint(robot_x, robot_y, robot_yaw, min_x, min_y, max_x, max_y);
+}
+
+void
+StaticLayer::updateFootprint(
+  double robot_x, double robot_y, double robot_yaw,
+  double * min_x, double * min_y,
+  double * max_x,
+  double * max_y)
+{
+  if (!footprint_clearing_enabled_) {return;}
+
+  transformFootprint(robot_x, robot_y, robot_yaw, getFootprint(), transformed_footprint_);
+
+  for (unsigned int i = 0; i < transformed_footprint_.size(); i++) {
+    touch(transformed_footprint_[i].x, transformed_footprint_[i].y, min_x, min_y, max_x, max_y);
+  }
 }
 
 void
@@ -378,18 +401,23 @@ StaticLayer::updateCosts(
 {
   std::lock_guard<Costmap2D::mutex_t> guard(*getMutex());
   if (!enabled_) {
-    update_in_progress_.store(false);
     return;
   }
-  if (!map_received_) {
+  if (!map_received_in_update_bounds_) {
     static int count = 0;
     // throttle warning down to only 1/10 message rate
     if (++count == 10) {
       RCLCPP_WARN(logger_, "Can't update static costmap layer, no map received");
       count = 0;
     }
-    update_in_progress_.store(false);
     return;
+  }
+
+  std::vector<MapLocation> map_region_to_restore;
+  if (footprint_clearing_enabled_) {
+    map_region_to_restore.reserve(100);
+    getMapRegionOccupiedByPolygon(transformed_footprint_, map_region_to_restore);
+    setMapRegionOccupiedByPolygon(map_region_to_restore, nav2_costmap_2d::FREE_SPACE);
   }
 
   if (!layered_costmap_->isRolling()) {
@@ -411,7 +439,6 @@ StaticLayer::updateCosts(
         transform_tolerance_);
     } catch (tf2::TransformException & ex) {
       RCLCPP_ERROR(logger_, "StaticLayer: %s", ex.what());
-      update_in_progress_.store(false);
       return;
     }
     // Copy map data given proper transformations
@@ -436,7 +463,11 @@ StaticLayer::updateCosts(
       }
     }
   }
-  update_in_progress_.store(false);
+
+  if (footprint_clearing_enabled_ && restore_cleared_footprint_) {
+    // restore the map region occupied by the polygon using cached data
+    restoreMapRegionOccupiedByPolygon(map_region_to_restore);
+  }
   current_ = true;
 }
 
@@ -475,6 +506,15 @@ StaticLayer::dynamicParametersCallback(
         height_ = size_y_;
         has_updated_data_ = true;
         current_ = false;
+      } else if (param_name == name_ + "." + "footprint_clearing_enabled") {
+        footprint_clearing_enabled_ = parameter.as_bool();
+      } else if (param_name == name_ + "." + "restore_cleared_footprint") {
+        if (footprint_clearing_enabled_) {
+          restore_cleared_footprint_ = parameter.as_bool();
+        } else {
+          RCLCPP_WARN(logger_, "restore_cleared_footprint cannot be used "
+                      "when footprint_clearing_enabled is False. Rejecting parameter update.");
+        }
       }
     }
   }

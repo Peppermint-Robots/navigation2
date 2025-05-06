@@ -1,4 +1,4 @@
-// Copyright (c) 2022 Samsung Research Russia
+// Copyright (c) 2022 Samsung R&D Institute Russia
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,6 +14,10 @@
 
 #ifndef NAV2_COLLISION_MONITOR__SCAN_HPP_
 #define NAV2_COLLISION_MONITOR__SCAN_HPP_
+
+#include <memory>
+#include <string>
+#include <vector>
 
 #include "sensor_msgs/msg/laser_scan.hpp"
 
@@ -31,12 +35,14 @@ public:
   /**
    * @brief Scan constructor
    * @param node Collision Monitor node pointer
-   * @param polygon_name Name of data source
+   * @param source_name Name of data source
    * @param tf_buffer Shared pointer to a TF buffer
    * @param base_frame_id Robot base frame ID. The output data will be transformed into this frame.
    * @param global_frame_id Global frame ID for correct transform calculation
    * @param transform_tolerance Transform tolerance
    * @param source_timeout Maximum time interval in which data is considered valid
+   * @param base_shift_correction Whether to correct source data towards to base frame movement,
+   * considering the difference between current time and latest source time
    */
   Scan(
     const nav2_util::LifecycleNode::WeakPtr & node,
@@ -45,7 +51,8 @@ public:
     const std::string & base_frame_id,
     const std::string & global_frame_id,
     const tf2::Duration & transform_tolerance,
-    const rclcpp::Duration & source_timeout);
+    const rclcpp::Duration & source_timeout,
+    const bool base_shift_correction);
   /**
    * @brief Scan destructor
    */
@@ -62,10 +69,11 @@ public:
    * @param curr_time Current node time for data interpolation
    * @param data Array where the data from source to be added.
    * Added data is transformed to base_frame_id_ coordinate system at curr_time.
+   * @return false if an invalid source should block the robot
    */
-  void getData(
+  bool getData(
     const rclcpp::Time & curr_time,
-    std::vector<Point> & data) const;
+    std::vector<Point> & data);
 
 protected:
   /**

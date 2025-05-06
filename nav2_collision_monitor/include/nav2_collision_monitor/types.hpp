@@ -1,4 +1,4 @@
-// Copyright (c) 2022 Samsung Research Russia
+// Copyright (c) 2022 Samsung R&D Institute Russia
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,6 +15,8 @@
 #ifndef NAV2_COLLISION_MONITOR__TYPES_HPP_
 #define NAV2_COLLISION_MONITOR__TYPES_HPP_
 
+#include <string>
+
 namespace nav2_collision_monitor
 {
 
@@ -27,8 +29,9 @@ struct Velocity
 
   inline bool operator<(const Velocity & second) const
   {
-    const double first_vel = x * x + y * y;
-    const double second_vel = second.x * second.x + second.y * second.y;
+    const double first_vel = x * x + y * y + tw * tw;
+    const double second_vel = second.x * second.x + second.y * second.y + second.tw * second.tw;
+    // This comparison includes rotations in place, where linear velocities are equal to zero
     return first_vel < second_vel;
   }
 
@@ -64,7 +67,8 @@ enum ActionType
   DO_NOTHING = 0,  // No action
   STOP = 1,  // Stop the robot
   SLOWDOWN = 2,  // Slowdown in percentage from current operating speed
-  APPROACH = 3  // Keep constant time interval before collision
+  APPROACH = 3,  // Keep constant time interval before collision
+  LIMIT = 4  // Limit absolute velocity from current operating speed
 };
 
 /// @brief Action for robot
@@ -72,6 +76,7 @@ struct Action
 {
   ActionType action_type;
   Velocity req_vel;
+  std::string polygon_name;
 };
 
 }  // namespace nav2_collision_monitor

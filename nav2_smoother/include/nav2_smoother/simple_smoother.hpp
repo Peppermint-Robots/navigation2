@@ -24,29 +24,17 @@
 #include <utility>
 
 #include "nav2_core/smoother.hpp"
+#include "nav2_smoother/smoother_utils.hpp"
 #include "nav2_costmap_2d/costmap_2d.hpp"
 #include "nav2_costmap_2d/cost_values.hpp"
 #include "nav2_util/geometry_utils.hpp"
 #include "nav2_util/node_utils.hpp"
 #include "nav_msgs/msg/path.hpp"
 #include "angles/angles.h"
-#include "tf2/utils.h"
+#include "tf2/utils.hpp"
 
 namespace nav2_smoother
 {
-
-/**
- * @class nav2_smoother::PathSegment
- * @brief A segment of a path in start/end indices
- */
-struct PathSegment
-{
-  unsigned int start;
-  unsigned int end;
-};
-
-typedef std::vector<geometry_msgs::msg::PoseStamped>::iterator PathIterator;
-typedef std::vector<geometry_msgs::msg::PoseStamped>::reverse_iterator ReversePathIterator;
 
 /**
  * @class nav2_smoother::SimpleSmoother
@@ -104,9 +92,8 @@ protected:
    * @param reversing_segment Return if this is a reversing segment
    * @param costmap Pointer to minimal costmap
    * @param max_time Maximum time to compute, stop early if over limit
-   * @return If smoothing was successful
    */
-  bool smoothImpl(
+  void smoothImpl(
     nav_msgs::msg::Path & path,
     bool & reversing_segment,
     const nav2_costmap_2d::Costmap2D * costmap,
@@ -126,32 +113,15 @@ protected:
    * @brief Set the field value for a given dimension
    * @param msg Current pose to sample
    * @param dim Dimension ID of interest
-   * @param value to set the dimention to for the pose
+   * @param value to set the dimension to for the pose
    */
   inline void setFieldByDim(
     geometry_msgs::msg::PoseStamped & msg, const unsigned int dim,
     const double & value);
 
-  /**
-   * @brief Finds the starting and end indices of path segments where
-   * the robot is traveling in the same direction (e.g. forward vs reverse)
-   * @param path Path in which to look for cusps
-   * @return Set of index pairs for each segment of the path in a given direction
-   */
-  std::vector<PathSegment> findDirectionalPathSegments(const nav_msgs::msg::Path & path);
-
-  /**
-   * @brief For a given path, update the path point orientations based on smoothing
-   * @param path Path to approximate the path orientation in
-   * @param reversing_segment Return if this is a reversing segment
-   */
-  inline void updateApproximatePathOrientations(
-    nav_msgs::msg::Path & path,
-    bool & reversing_segment);
-
   double tolerance_, data_w_, smooth_w_;
-  int max_its_, refinement_ctr_;
-  bool do_refinement_;
+  int max_its_, refinement_ctr_, refinement_num_;
+  bool do_refinement_, enforce_path_inversion_;
   std::shared_ptr<nav2_costmap_2d::CostmapSubscriber> costmap_sub_;
   rclcpp::Logger logger_{rclcpp::get_logger("SimpleSmoother")};
 };
