@@ -1,4 +1,7 @@
-# Nav2
+# Nav2 PPMT
+
+> This has 1 extra commit on top of humble branch to change QoS of odom subscriber in nav2_dwb_controller/nav_2d_utils. Always rebase this commit on top of humble whenever it is updated.
+
 [![GitHub Workflow Status](https://github.com/ros-navigation/navigation2/actions/workflows/update_ci_image.yaml/badge.svg)](https://github.com/ros-navigation/navigation2/actions/workflows/update_ci_image.yaml)
 [![codecov](https://codecov.io/gh/ros-navigation/navigation2/branch/main/graph/badge.svg?token=S3iRmypwlg)](https://codecov.io/gh/ros-navigation/navigation2)
 [![Build Status](https://circleci.com/gh/ros-navigation/navigation2/tree/main.svg?style=svg)](https://circleci.com/gh/ros-navigation/navigation2/tree/main)
