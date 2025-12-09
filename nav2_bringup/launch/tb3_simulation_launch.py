@@ -38,6 +38,7 @@ def generate_launch_description() -> LaunchDescription:
     slam = LaunchConfiguration('slam')
     namespace = LaunchConfiguration('namespace')
     map_yaml_file = LaunchConfiguration('map')
+    graph_filepath = LaunchConfiguration('graph')
     use_sim_time = LaunchConfiguration('use_sim_time')
     params_file = LaunchConfiguration('params_file')
     autostart = LaunchConfiguration('autostart')
@@ -76,6 +77,11 @@ def generate_launch_description() -> LaunchDescription:
     declare_map_yaml_cmd = DeclareLaunchArgument(
         'map',
         default_value=os.path.join(bringup_dir, 'maps', 'tb3_sandbox.yaml'),
+    )
+
+    declare_graph_file_cmd = DeclareLaunchArgument(
+        'graph',
+        default_value=os.path.join(bringup_dir, 'graphs', 'turtlebot3_graph.geojson'),
     )
 
     declare_use_sim_time_cmd = DeclareLaunchArgument(
@@ -183,11 +189,14 @@ def generate_launch_description() -> LaunchDescription:
             'namespace': namespace,
             'slam': slam,
             'map': map_yaml_file,
+            'graph': graph_filepath,
             'use_sim_time': use_sim_time,
             'params_file': params_file,
             'autostart': autostart,
             'use_composition': use_composition,
             'use_respawn': use_respawn,
+            'use_keepout_zones': 'False',
+            'use_speed_zones': 'False',
         }.items(),
     )
     # The SDF file for the world is a xacro file because we wanted to
@@ -199,7 +208,7 @@ def generate_launch_description() -> LaunchDescription:
     world_sdf_xacro = ExecuteProcess(
         cmd=['xacro', '-o', world_sdf, ['headless:=', headless], world])
     gazebo_server = ExecuteProcess(
-        cmd=['gz', 'sim', '-r', '-s', world_sdf],
+        cmd=['ign', 'gazebo', '-r', '-s', world_sdf],
         output='screen',
         condition=IfCondition(use_simulator)
     )
@@ -217,7 +226,7 @@ def generate_launch_description() -> LaunchDescription:
         ),
         condition=IfCondition(PythonExpression(
             [use_simulator, ' and not ', headless])),
-        launch_arguments={'gz_args': ['-v4 -g ']}.items(),
+        launch_arguments={'ign_args': ['-v4 -g ']}.items(),
     )
 
     gz_robot = IncludeLaunchDescription(
@@ -241,6 +250,7 @@ def generate_launch_description() -> LaunchDescription:
     ld.add_action(declare_namespace_cmd)
     ld.add_action(declare_slam_cmd)
     ld.add_action(declare_map_yaml_cmd)
+    ld.add_action(declare_graph_file_cmd)
     ld.add_action(declare_use_sim_time_cmd)
     ld.add_action(declare_params_file_cmd)
     ld.add_action(declare_autostart_cmd)

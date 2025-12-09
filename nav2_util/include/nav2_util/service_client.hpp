@@ -47,29 +47,14 @@ public:
         rclcpp::CallbackGroupType::MutuallyExclusive,
         false);
       callback_group_executor_ = std::make_shared<rclcpp::executors::SingleThreadedExecutor>();
-      callback_group_executor_->add_callback_group(
-        callback_group_,
-        node_->get_node_base_interface());
+      callback_group_executor_->add_callback_group(callback_group_,
+          node_->get_node_base_interface());
     }
     // When a nullptr is passed, the client will use the default callback group
     client_ = node_->template create_client<ServiceT>(
       service_name,
-      rclcpp::SystemDefaultsQoS(),
+      rclcpp::SystemDefaultsQoS().get_rmw_qos_profile(),
       callback_group_);
-    rcl_service_introspection_state_t introspection_state = RCL_SERVICE_INTROSPECTION_OFF;
-    if (!node_->has_parameter("service_introspection_mode")) {
-      node_->declare_parameter("service_introspection_mode", "disabled");
-    }
-    std::string service_introspection_mode =
-      node_->get_parameter("service_introspection_mode").as_string();
-    if (service_introspection_mode == "metadata") {
-      introspection_state = RCL_SERVICE_INTROSPECTION_METADATA;
-    } else if (service_introspection_mode == "contents") {
-      introspection_state = RCL_SERVICE_INTROSPECTION_CONTENTS;
-    }
-
-    this->client_->configure_introspection(
-      node_->get_clock(), rclcpp::SystemDefaultsQoS(), introspection_state);
   }
 
   using RequestType = typename ServiceT::Request;

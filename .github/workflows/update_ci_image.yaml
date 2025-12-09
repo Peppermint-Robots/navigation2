@@ -8,6 +8,10 @@ on:
   push:
     branches:
       - main
+      - kilted
+      - jazzy
+      - humble
+      - humble_main
     paths:
       - '**/package.xml'
       - '**/*.repos'

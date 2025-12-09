@@ -67,6 +67,12 @@ public:
   BT::NodeStatus on_cancelled() override;
 
   /**
+   * @brief Function to perform work in a BT Node when the action server times out
+   * Such as setting the error code ID status to timed out for action clients.
+   */
+  void on_timeout() override;
+
+  /**
    * \brief Override required by the a BT action. Cancel the action and set the path output
    */
   void halt() override;
@@ -87,7 +93,7 @@ public:
         BT::InputPort<geometry_msgs::msg::PoseStamped>(
           "start",
           "Used as the planner start pose instead of the current robot pose, if use_start is"
-          " not false (i.e. not provided or set to true)"),
+                   " not false (i.e. not provided or set to true)"),
         BT::InputPort<bool>(
           "use_start", "For using or not using (i.e. ignoring) the provided start pose"),
         BT::InputPort<std::string>(

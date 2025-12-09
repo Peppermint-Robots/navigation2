@@ -41,9 +41,9 @@ void ComputePathToPoseAction::on_tick()
       // in case we don't have a "start" pose
       goal_.use_start = false;
       RCLCPP_ERROR(
-        node_->get_logger(),
-        "use_start is set to true but no start pose was provided, falling back to default "
-        "behavior, i.e. using the current robot pose");
+          node_->get_logger(),
+          "use_start is set to true but no start pose was provided, falling back to default "
+          "behavior, i.e. using the current robot pose");
     }
   } else {
     // else if "use_start" is not provided, but "start" is, then use it in order to not change
@@ -80,6 +80,12 @@ BT::NodeStatus ComputePathToPoseAction::on_cancelled()
   setOutput("error_code_id", ActionResult::NONE);
   setOutput("error_msg", "");
   return BT::NodeStatus::SUCCESS;
+}
+
+void ComputePathToPoseAction::on_timeout()
+{
+  setOutput("error_code_id", ActionResult::TIMEOUT);
+  setOutput("error_msg", "Behavior Tree action client timed out waiting.");
 }
 
 void ComputePathToPoseAction::halt()

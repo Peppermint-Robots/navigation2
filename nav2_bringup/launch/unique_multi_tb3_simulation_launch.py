@@ -68,6 +68,7 @@ def generate_launch_description() -> LaunchDescription:
 
     # On this example all robots are launched with the same settings
     map_yaml_file = LaunchConfiguration('map')
+    graph_filepath = LaunchConfiguration('graph')
 
     autostart = LaunchConfiguration('autostart')
     rviz_config_file = LaunchConfiguration('rviz_config')
@@ -86,6 +87,11 @@ def generate_launch_description() -> LaunchDescription:
         'map',
         default_value=os.path.join(bringup_dir, 'maps', 'tb3_sandbox.yaml'),
         description='Full path to map file to load',
+    )
+
+    declare_graph_file_cmd = DeclareLaunchArgument(
+        'graph',
+        default_value=os.path.join(bringup_dir, 'graphs', 'turtlebot3_graph.geojson'),
     )
 
     declare_robot1_params_file_cmd = DeclareLaunchArgument(
@@ -131,7 +137,7 @@ def generate_launch_description() -> LaunchDescription:
     world_sdf_xacro = ExecuteProcess(
         cmd=['xacro', '-o', world_sdf, ['headless:=', 'False'], world])
     start_gazebo_cmd = ExecuteProcess(
-        cmd=['gz', 'sim', '-r', '-s', world_sdf],
+        cmd=['ign', 'gazebo', '-r', '-s', world_sdf],
         output='screen',
     )
 
@@ -164,6 +170,7 @@ def generate_launch_description() -> LaunchDescription:
                     launch_arguments={
                         'namespace': robot['name'],
                         'map': map_yaml_file,
+                        'graph': graph_filepath,
                         'use_sim_time': 'True',
                         'params_file': params_file,
                         'autostart': autostart,
@@ -214,9 +221,9 @@ def generate_launch_description() -> LaunchDescription:
         nav_instances_cmds.append(group)
 
     set_env_vars_resources = AppendEnvironmentVariable(
-        'GZ_SIM_RESOURCE_PATH', os.path.join(sim_dir, 'models'))
+        'IGN_GAZEBO_RESOURCE_PATH', os.path.join(sim_dir, 'models'))
     set_env_vars_resources2 = AppendEnvironmentVariable(
-            'GZ_SIM_RESOURCE_PATH',
+            'IGN_GAZEBO_RESOURCE_PATH',
             str(Path(os.path.join(sim_dir)).parent.resolve()))
 
     # Create the launch description and populate
@@ -227,6 +234,7 @@ def generate_launch_description() -> LaunchDescription:
     # Declare the launch options
     ld.add_action(declare_world_cmd)
     ld.add_action(declare_map_yaml_cmd)
+    ld.add_action(declare_graph_file_cmd)
     ld.add_action(declare_robot1_params_file_cmd)
     ld.add_action(declare_robot2_params_file_cmd)
     ld.add_action(declare_use_rviz_cmd)

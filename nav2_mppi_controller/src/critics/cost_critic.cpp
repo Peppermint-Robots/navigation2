@@ -22,6 +22,9 @@ namespace mppi::critics
 
 void CostCritic::initialize()
 {
+  auto getParentParam = parameters_handler_->getParamGetter(parent_name_);
+  getParentParam(enforce_path_inversion_, "enforce_path_inversion", false);
+
   auto getParam = parameters_handler_->getParamGetter(name_);
   getParam(consider_footprint_, "consider_footprint", false);
   getParam(power_, "cost_power", 1);
@@ -58,17 +61,17 @@ void CostCritic::initialize()
 
   if (costmap_ros_->getUseRadius() == consider_footprint_) {
     RCLCPP_WARN(
-      logger_,
-      "Inconsistent configuration in collision checking. Please verify the robot's shape settings "
-      "in both the costmap and the cost critic.");
+    logger_,
+    "Inconsistent configuration in collision checking. Please verify the robot's shape settings "
+    "in both the costmap and the cost critic.");
     if (costmap_ros_->getUseRadius()) {
       throw nav2_core::ControllerException(
-              "Considering footprint in collision checking but no robot footprint provided in the "
-              "costmap.");
+      "Considering footprint in collision checking but no robot footprint provided in the "
+      "costmap.");
     }
   }
 
-  if (near_collision_cost_ > 253) {
+  if(near_collision_cost_ > 253) {
     RCLCPP_WARN(logger_, "Near collision cost is set higher than INSCRIBED_INFLATED_OBSTACLE");
   }
 
@@ -96,6 +99,19 @@ float CostCritic::findCircumscribedCost(
     inflation_layer_name_);
   if (inflation_layer != nullptr) {
     const double resolution = costmap->getCostmap()->getResolution();
+    double inflation_radius = inflation_layer->getInflationRadius();
+    if (inflation_radius < circum_radius) {
+      RCLCPP_ERROR(
+        rclcpp::get_logger("computeCircumscribedCost"),
+        "The inflation radius (%f) is smaller than the circumscribed radius (%f) "
+        "If this is an SE2-collision checking plugin, it cannot use costmap potential "
+        "field to speed up collision checking by only checking the full footprint "
+        "when robot is within possibly-inscribed radius of an obstacle. This may "
+        "significantly slow down planning times!",
+        inflation_radius, circum_radius);
+      result = 0.0;
+      return result;
+    }
     result = inflation_layer->computeCost(circum_radius / resolution);
   } else {
     RCLCPP_WARN(
@@ -119,6 +135,8 @@ void CostCritic::score(CriticData & data)
     return;
   }
 
+  geometry_msgs::msg::Pose goal = utils::getCriticGoal(data, enforce_path_inversion_);
+
   // Setup cost information for various parts of the critic
   is_tracking_unknown_ = costmap_ros_->getLayeredCostmap()->isTrackingUnknown();
   auto * costmap = collision_checker_.getCostmap();
@@ -135,7 +153,7 @@ void CostCritic::score(CriticData & data)
 
   // If near the goal, don't apply the preferential term since the goal is near obstacles
   bool near_goal = false;
-  if (utils::withinPositionGoalTolerance(near_goal_distance_, data.state.pose.pose, data.goal)) {
+  if (utils::withinPositionGoalTolerance(near_goal_distance_, data.state.pose.pose, goal)) {
     near_goal = true;
   }
 

@@ -1182,6 +1182,9 @@ AmclNode::dynamicParametersCallback(
   for (auto parameter : parameters) {
     const auto & param_type = parameter.get_type();
     const auto & param_name = parameter.get_name();
+    if (param_name.find('.') != std::string::npos) {
+      continue;
+    }
 
     if (param_type == ParameterType::PARAMETER_DOUBLE) {
       if (param_name == "alpha1") {
@@ -1520,9 +1523,15 @@ AmclNode::initMessageFilters()
 {
   auto sub_opt = rclcpp::SubscriptionOptions();
   sub_opt.callback_group = callback_group_;
+
+  #if RCLCPP_VERSION_GTE(29, 6, 0)
+  laser_scan_sub_ = std::make_unique<message_filters::Subscriber<sensor_msgs::msg::LaserScan>>(
+    shared_from_this(), scan_topic_, rclcpp::SensorDataQoS(), sub_opt);
+  #else
   laser_scan_sub_ = std::make_unique<message_filters::Subscriber<sensor_msgs::msg::LaserScan,
       rclcpp_lifecycle::LifecycleNode>>(
     shared_from_this(), scan_topic_, rmw_qos_profile_sensor_data, sub_opt);
+  #endif
 
   laser_scan_filter_ = std::make_unique<tf2_ros::MessageFilter<sensor_msgs::msg::LaserScan>>(
     *laser_scan_sub_, *tf_buffer_, odom_frame_id_, 10,
@@ -1567,22 +1576,19 @@ AmclNode::initServices()
   global_loc_srv_ = std::make_shared<nav2_util::ServiceServer<std_srvs::srv::Empty,
       std::shared_ptr<nav2_util::LifecycleNode>>>(
     "reinitialize_global_localization", shared_from_this(),
-    std::bind(
-      &AmclNode::globalLocalizationCallback, this, std::placeholders::_1,
+    std::bind(&AmclNode::globalLocalizationCallback, this, std::placeholders::_1,
       std::placeholders::_2, std::placeholders::_3));
 
   initial_guess_srv_ = std::make_shared<nav2_util::ServiceServer<nav2_msgs::srv::SetInitialPose,
       std::shared_ptr<nav2_util::LifecycleNode>>>(
     "set_initial_pose", shared_from_this(),
-    std::bind(
-      &AmclNode::initialPoseReceivedSrv, this, std::placeholders::_1, std::placeholders::_2,
+    std::bind(&AmclNode::initialPoseReceivedSrv, this, std::placeholders::_1, std::placeholders::_2,
       std::placeholders::_3));
 
   nomotion_update_srv_ = std::make_shared<nav2_util::ServiceServer<std_srvs::srv::Empty,
       std::shared_ptr<nav2_util::LifecycleNode>>>(
     "request_nomotion_update", shared_from_this(),
-    std::bind(
-      &AmclNode::nomotionUpdateCallback, this, std::placeholders::_1, std::placeholders::_2,
+    std::bind(&AmclNode::nomotionUpdateCallback, this, std::placeholders::_1, std::placeholders::_2,
       std::placeholders::_3));
 }
 

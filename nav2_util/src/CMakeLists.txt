@@ -27,6 +27,7 @@ target_link_libraries(${library_name} PUBLIC
   tf2_ros::tf2_ros
   tf2::tf2
   ${tf2_geometry_msgs_TARGETS}
+  pluginlib::pluginlib
 )
 target_link_libraries(${library_name} PRIVATE
   ${bond_TARGETS}
@@ -37,10 +38,10 @@ add_executable(lifecycle_bringup
 )
 target_link_libraries(lifecycle_bringup PRIVATE ${library_name} rclcpp::rclcpp)
 
-add_executable(base_footprint_publisher
-  base_footprint_publisher.cpp
-)
-target_link_libraries(base_footprint_publisher PRIVATE ${library_name} rclcpp::rclcpp ${tf2_msgs_TARGETS})
+# add_executable(base_footprint_publisher
+#   base_footprint_publisher.cpp
+# )
+# target_link_libraries(base_footprint_publisher PRIVATE ${library_name} rclcpp::rclcpp ${tf2_msgs_TARGETS})
 
 install(TARGETS
   ${library_name}

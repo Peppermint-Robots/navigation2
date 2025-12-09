@@ -18,6 +18,7 @@ find_package(tf2 REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
 find_package(tf2_msgs REQUIRED)
 find_package(tf2_ros REQUIRED)
+find_package(pluginlib REQUIRED)
 
 nav2_package()
 
@@ -30,11 +31,7 @@ install(DIRECTORY include/
 )
 
 if(BUILD_TESTING)
-  find_package(ament_lint_auto REQUIRED)
   find_package(ament_cmake_pytest REQUIRED)
-  # skip copyright linting
-  set(ament_cmake_copyright_FOUND TRUE)
-  ament_lint_auto_find_test_dependencies()
 
   find_package(ament_cmake_gtest REQUIRED)
   add_subdirectory(test)
@@ -56,6 +53,7 @@ ament_export_dependencies(
   tf2
   tf2_geometry_msgs
   tf2_ros
+  pluginlib
 )
 ament_export_targets(${library_name})
 

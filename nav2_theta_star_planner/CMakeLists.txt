@@ -60,9 +60,7 @@ install(FILES theta_star_planner.xml
 )
 
 if(BUILD_TESTING)
-  find_package(ament_lint_auto REQUIRED)
   set(gtest_disable_pthreads OFF)
-  ament_lint_auto_find_test_dependencies()
 
   find_package(ament_cmake_gtest REQUIRED)
 
@@ -84,7 +82,8 @@ ament_export_libraries(${library_name})
 ament_export_dependencies(
   geometry_msgs
   nav2_core
-  nav2_costmap_2dnav2_util
+  nav2_costmap_2d
+  nav2_util
   nav_msgs
   rclcpp
   rclcpp_lifecycle

@@ -201,8 +201,7 @@ PlannerServer::on_activate(const rclcpp_lifecycle::State & /*state*/)
       std::shared_ptr<nav2_util::LifecycleNode>>>(
     "is_path_valid",
     node,
-    std::bind(
-      &PlannerServer::isPathValid, this, std::placeholders::_1, std::placeholders::_2,
+    std::bind(&PlannerServer::isPathValid, this, std::placeholders::_1, std::placeholders::_2,
       std::placeholders::_3));
 
   // Add callback for dynamic parameters
@@ -385,6 +384,7 @@ void PlannerServer::computePlanThroughPoses()
   auto goal = action_server_poses_->get_current_goal();
   auto result = std::make_shared<ActionThroughPoses::Result>();
   nav_msgs::msg::Path concat_path;
+  RCLCPP_INFO(get_logger(), "Computing path through poses to goal.");
 
   geometry_msgs::msg::PoseStamped curr_start, curr_goal;
 
@@ -516,6 +516,7 @@ PlannerServer::computePlan()
   // Initialize the ComputePathToPose goal and result
   auto goal = action_server_pose_->get_current_goal();
   auto result = std::make_shared<ActionToPose::Result>();
+  RCLCPP_INFO(get_logger(), "Computing path to goal.");
 
   geometry_msgs::msg::PoseStamped start;
 
@@ -731,11 +732,14 @@ PlannerServer::dynamicParametersCallback(std::vector<rclcpp::Parameter> paramete
   std::lock_guard<std::mutex> lock(dynamic_params_lock_);
   rcl_interfaces::msg::SetParametersResult result;
   for (auto parameter : parameters) {
-    const auto & type = parameter.get_type();
-    const auto & name = parameter.get_name();
+    const auto & param_type = parameter.get_type();
+    const auto & param_name = parameter.get_name();
+    if (param_name.find('.') != std::string::npos) {
+      continue;
+    }
 
-    if (type == ParameterType::PARAMETER_DOUBLE) {
-      if (name == "expected_planner_frequency") {
+    if (param_type == ParameterType::PARAMETER_DOUBLE) {
+      if (param_name == "expected_planner_frequency") {
         if (parameter.as_double() > 0) {
           max_planner_duration_ = 1 / parameter.as_double();
         } else {

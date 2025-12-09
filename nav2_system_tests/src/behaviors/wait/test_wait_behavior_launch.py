@@ -53,7 +53,12 @@ def generate_launch_description() -> LaunchDescription:
 
     # Replace the `use_astar` setting on the params file
     configured_params = RewrittenYaml(
-        source_file=params_file, root_key='', param_rewrites='', convert_types=True
+        source_file=params_file, root_key='', param_rewrites={},
+        value_rewrites={
+            'KEEPOUT_ZONE_ENABLED': 'False',
+            'SPEED_ZONE_ENABLED': 'False',
+        },
+        convert_types=True
     )
 
     return LaunchDescription(
@@ -61,17 +66,17 @@ def generate_launch_description() -> LaunchDescription:
             SetEnvironmentVariable('RCUTILS_LOGGING_BUFFERED_STREAM', '1'),
             SetEnvironmentVariable('RCUTILS_LOGGING_USE_STDOUT', '1'),
             AppendEnvironmentVariable(
-                'GZ_SIM_RESOURCE_PATH', os.path.join(sim_dir, 'models')
+                'IGN_GAZEBO_RESOURCE_PATH', os.path.join(sim_dir, 'models')
             ),
             AppendEnvironmentVariable(
-                'GZ_SIM_RESOURCE_PATH',
+                'IGN_GAZEBO_RESOURCE_PATH',
                 str(Path(os.path.join(sim_dir)).parent.resolve())
             ),
             IncludeLaunchDescription(
                 PythonLaunchDescriptionSource(
                     os.path.join(ros_gz_sim_dir, 'launch', 'gz_sim.launch.py')
                 ),
-                launch_arguments={'gz_args': ['-r -s ', world_sdf_xacro]}.items(),
+                launch_arguments={'ign_args': ['-r -s ', world_sdf_xacro]}.items(),
             ),
             IncludeLaunchDescription(
                 PythonLaunchDescriptionSource(
@@ -128,7 +133,7 @@ def main(argv: list[str] = sys.argv[1:]):  # type: ignore[no-untyped-def]
     ls = LaunchService(argv=argv)
     ls.include_launch_description(ld)
     return_code = lts.run(ls)
-    kill_os_processes('gz sim')
+    kill_os_processes('ign gazebo')
     return return_code
 
 
